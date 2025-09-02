@@ -1,0 +1,166 @@
+version: "3.9"
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: "2181"
+      ZOOKEEPER_TICK_TIME: "2000"
+    ports: ["2181:2181"]
+    volumes: ["zookeeper_data:/var/lib/zookeeper/data"]
+    networks: ["absolute-jobs-network"]
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  kafka1:
+    image: confluentinc/cp-kafka:7.6.0
+    environment:
+      KAFKA_BROKER_ID: "1"
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9092"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka1:9092"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "3"
+      KAFKA_MIN_INSYNC_REPLICAS: "2"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    ports: ["9092:9092"]
+    volumes: ["kafka1_data:/var/lib/kafka/data"]
+    networks: ["absolute-jobs-network"]
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  kafka2:
+    image: confluentinc/cp-kafka:7.6.0
+    environment:
+      KAFKA_BROKER_ID: "2"
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9092"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka2:9092"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "3"
+      KAFKA_MIN_INSYNC_REPLICAS: "2"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    ports: ["9093:9092"]
+    volumes: ["kafka2_data:/var/lib/kafka/data"]
+    networks: ["absolute-jobs-network"]
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  kafka3:
+    image: confluentinc/cp-kafka:7.6.0
+    environment:
+      KAFKA_BROKER_ID: "3"
+      KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+      KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:9092"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka3:9092"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "3"
+      KAFKA_MIN_INSYNC_REPLICAS: "2"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    ports: ["9094:9092"]
+    volumes: ["kafka3_data:/var/lib/kafka/data"]
+    networks: ["absolute-jobs-network"]
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.6.0
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: "schema-registry"
+      SCHEMA_REGISTRY_LISTENERS: "http://0.0.0.0:8081"
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "PLAINTEXT://kafka1:9092,PLAINTEXT://kafka2:9092,PLAINTEXT://kafka3:9092"
+    ports: ["8081:8081"]
+    networks: ["absolute-jobs-network"]
+    volumes: ["schema_registry_data:/var/lib/schema_registry"]
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  kafka-connect:
+    image: confluentinc/cp-kafka-connect:7.6.0
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: "kafka1:9092,kafka2:9092,kafka3:9092"
+      CONNECT_REST_PORT: "8083"
+      CONNECT_GROUP_ID: "connect-cluster"
+      CONNECT_REST_ADVERTISED_HOST_NAME: "kafka-connect"
+      CONNECT_CONFIG_STORAGE_TOPIC: "connect-configs"
+      CONNECT_OFFSET_STORAGE_TOPIC: "connect-offsets"
+      CONNECT_STATUS_STORAGE_TOPIC: "connect-status"
+      CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.storage.StringConverter"
+      CONNECT_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+    ports: ["8083:8083"]
+    networks: ["absolute-jobs-network"]
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "local"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka1:9092,kafka2:9092,kafka3:9092"
+      KAFKA_CLUSTERS_0_ZOOKEEPER: "zookeeper:2181"
+    ports: ["9021:8080"]
+    networks: ["absolute-jobs-network"]
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  kafka-app:
+    image: venu11/kafka-app:latest # build & push before deploy
+    env_file: ./kafka-app/.env
+    networks: ["absolute-jobs-network"]
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  order-consumer:
+    image: venu11/kafka-app:latest
+    env_file: ./kafka-app/.env
+    command: ["python3", "consumer/order_consumer.py"]
+    networks: ["absolute-jobs-network"]
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+
+  db-consumer:
+    image: venu11/kafka-app:latest
+    env_file: ./kafka-app/.env
+    command: ["python3", "consumer/db_consumer.py"]
+    networks: ["absolute-jobs-network"]
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+
+  email-consumer:
+    image: venu11/kafka-app:latest
+    env_file: ./kafka-app/.env
+    command: ["python3", "consumer/email_consumer.py"]
+    networks: ["absolute-jobs-network"]
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+
+volumes:
+  zookeeper_data: {}
+  kafka1_data: {}
+  kafka2_data: {}
+  kafka3_data: {}
+  schema_registry_data: {}
+
+networks:
+  absolute-jobs-network:
+    driver: overlay

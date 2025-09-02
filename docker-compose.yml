@@ -1,0 +1,156 @@
+version: "3.8"
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - absolute-jobs-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - absolute-jobs-network
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.6.0
+    hostname: schema-registry
+    container_name: schema-registry
+    depends_on:
+      - kafka
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:9092
+    networks:
+      - absolute-jobs-network
+
+  kafka-connect:
+    image: confluentinc/cp-kafka-connect:7.6.0
+    hostname: kafka-connect
+    container_name: kafka-connect
+    depends_on:
+      - kafka
+      - schema-registry
+    ports:
+      - "8083:8083"
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: kafka:9092
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: connect-cluster
+      CONNECT_REST_ADVERTISED_HOST_NAME: "kafka-connect" # ✅ Add this line
+      CONNECT_CONFIG_STORAGE_TOPIC: connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: connect-status
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_INTERNAL_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_INTERNAL_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_LOG4J_ROOT_LOGLEVEL: INFO
+      CONNECT_PLUGIN_PATH: /usr/share/java
+    networks:
+      - absolute-jobs-network
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "9021:8080"
+    depends_on:
+      - kafka
+      - zookeeper
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    networks:
+      - absolute-jobs-network
+
+    # This service runs your custom Python Kafka app
+  kafka-app:
+    # Build the Docker image using the Dockerfile in ./kafka-app directory
+    build:
+      context: ./kafka-app
+
+    # Name of the running container for easier reference
+    container_name: kafka-app
+
+    # Ensure kafka starts before this container
+    depends_on:
+      - kafka
+
+    # Mount your local app directory (./kafka-app) into the container at /app
+    volumes:
+      - ./kafka-app:/app
+
+    # Set the working directory inside the container
+    working_dir: /app
+
+    # Environment variables your app can access (or load from .env)
+    environment:
+      KAFKA_BROKER: kafka:9092 # Broker URL to connect to Kafka (inside Docker network)
+      TOPIC_NAME: my-topic # Default topic to use (you can override in code)
+
+    # Prevents the container from exiting immediately
+    # You can exec into it and run any script manually
+    command: tail -f /dev/null
+
+    networks:
+      - absolute-jobs-network # 👈 Connects to Laravel/Postgres network
+
+  order-consumer:
+    build: ./kafka-app
+    container_name: order-consumer
+    restart: always
+    env_file: ./kafka-app/.env
+    depends_on:
+      - kafka
+    networks:
+      - absolute-jobs-network
+    command: ["python3", "-m", "consumer.order_consumer"]
+
+  email-consumer:
+    build: ./kafka-app
+    container_name: email-consumer
+    env_file: ./kafka-app/.env
+    depends_on:
+      - kafka
+    networks:
+      - absolute-jobs-network
+    command: ["python3", "-m", "consumer.email_consumer"]
+
+  db-consumer:
+    build: ./kafka-app
+    container_name: db-consumer
+    env_file: ./kafka-app/.env
+    depends_on:
+      - kafka
+    networks:
+      - absolute-jobs-network
+    command: ["python3", "-m", "consumer.db_consumer"]
+
+networks:
+  absolute-jobs-network:
+    external: true # 👈 Do not remove — use existing network created separately

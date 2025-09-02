@@ -1,0 +1,9 @@
+confluent-kafka
+python-dotenv
+fastavro
+attrs
+httpx
+cachetools
+authlib
+sqlalchemy
+psycopg2-binary
