@@ -2,93 +2,126 @@ version: "3.8"
 
 services:
   zookeeper:
-    image: confluentinc/cp-zookeeper:7.6.0
-    hostname: zookeeper
+    image: confluentinc/cp-zookeeper:7.5.0
     container_name: zookeeper
-    ports:
-      - "2181:2181"
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
     networks:
-      - absolute-jobs-network
+      - kafka-network
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-logs:/var/lib/zookeeper/log
 
-  kafka:
-    image: confluentinc/cp-kafka:7.6.0
-    hostname: kafka
-    container_name: kafka
+  kafka-broker-1:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka-broker-1
     depends_on:
       - zookeeper
     ports:
       - "9092:9092"
+      - "19092:19092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker-1:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
     networks:
-      - absolute-jobs-network
+      - kafka-network
+    volumes:
+      - kafka-broker-1-data:/var/lib/kafka/data
+      - ./logs/kafka-broker-1:/var/log/kafka
 
-  schema-registry:
-    image: confluentinc/cp-schema-registry:7.6.0
-    hostname: schema-registry
-    container_name: schema-registry
+  kafka-broker-2:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka-broker-2
     depends_on:
-      - kafka
+      - zookeeper
     ports:
-      - "8081:8081"
+      - "9093:9093"
+      - "19093:19093"
     environment:
-      SCHEMA_REGISTRY_HOST_NAME: schema-registry
-      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
-      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:9092
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker-2:29093,PLAINTEXT_HOST://localhost:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
     networks:
-      - absolute-jobs-network
+      - kafka-network
+    volumes:
+      - kafka-broker-2-data:/var/lib/kafka/data
+      - ./logs/kafka-broker-2:/var/log/kafka
 
-  kafka-connect:
-    image: confluentinc/cp-kafka-connect:7.6.0
-    hostname: kafka-connect
-    container_name: kafka-connect
+  kafka-broker-3:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka-broker-3
     depends_on:
-      - kafka
-      - schema-registry
+      - zookeeper
     ports:
-      - "8083:8083"
+      - "9094:9094"
+      - "19094:19094"
     environment:
-      CONNECT_BOOTSTRAP_SERVERS: kafka:9092
-      CONNECT_REST_PORT: 8083
-      CONNECT_GROUP_ID: connect-cluster
-      CONNECT_REST_ADVERTISED_HOST_NAME: "kafka-connect" # ✅ Add this line
-      CONNECT_CONFIG_STORAGE_TOPIC: connect-configs
-      CONNECT_OFFSET_STORAGE_TOPIC: connect-offsets
-      CONNECT_STATUS_STORAGE_TOPIC: connect-status
-      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
-      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
-      CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
-      CONNECT_INTERNAL_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      CONNECT_INTERNAL_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
-      CONNECT_LOG4J_ROOT_LOGLEVEL: INFO
-      CONNECT_PLUGIN_PATH: /usr/share/java
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-broker-3:29094,PLAINTEXT_HOST://localhost:9094
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
     networks:
-      - absolute-jobs-network
+      - kafka-network
+    volumes:
+      - kafka-broker-3-data:/var/lib/kafka/data
+      - ./logs/kafka-broker-3:/var/log/kafka
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
-    ports:
-      - "9021:8080"
     depends_on:
-      - kafka
-      - zookeeper
+      - kafka-broker-1
+      - kafka-broker-2
+      - kafka-broker-3
+    ports:
+      - "8080:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-broker-1:29092,kafka-broker-2:29093,kafka-broker-3:29094
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
     networks:
-      - absolute-jobs-network
+      - kafka-network
 
-    # This service runs your custom Python Kafka app
+  # This service runs your custom Python Kafka app
   kafka-app:
     # Build the Docker image using the Dockerfile in ./kafka-app directory
     build:
@@ -99,58 +132,38 @@ services:
 
     # Ensure kafka starts before this container
     depends_on:
-      - kafka
+      - kafka-broker-1
+      - kafka-broker-2
+      - kafka-broker-3
 
     # Mount your local app directory (./kafka-app) into the container at /app
     volumes:
       - ./kafka-app:/app
+      - ./logs:/app/logs
 
     # Set the working directory inside the container
     working_dir: /app
 
-    # Environment variables your app can access (or load from .env)
-    environment:
-      KAFKA_BROKER: kafka:9092 # Broker URL to connect to Kafka (inside Docker network)
-      TOPIC_NAME: my-topic # Default topic to use (you can override in code)
+    # Environment variables - removed to allow .env file to take precedence
+    # environment variables are now loaded from .env file in the container
 
-    # Prevents the container from exiting immediately
-    # You can exec into it and run any script manually
-    command: tail -f /dev/null
+    # Automatically run 3 consumers for parallel processing (one per partition)
+    # Change to 'python consumer/email_consumer_latest.py' for single consumer
+    command: bash start_consumers.sh
 
     networks:
+      - kafka-network
       - absolute-jobs-network # 👈 Connects to Laravel/Postgres network
 
-  order-consumer:
-    build: ./kafka-app
-    container_name: order-consumer
-    restart: always
-    env_file: ./kafka-app/.env
-    depends_on:
-      - kafka
-    networks:
-      - absolute-jobs-network
-    command: ["python3", "-m", "consumer.order_consumer"]
-
-  email-consumer:
-    build: ./kafka-app
-    container_name: email-consumer
-    env_file: ./kafka-app/.env
-    depends_on:
-      - kafka
-    networks:
-      - absolute-jobs-network
-    command: ["python3", "-m", "consumer.email_consumer"]
-
-  db-consumer:
-    build: ./kafka-app
-    container_name: db-consumer
-    env_file: ./kafka-app/.env
-    depends_on:
-      - kafka
-    networks:
-      - absolute-jobs-network
-    command: ["python3", "-m", "consumer.db_consumer"]
-
 networks:
+  kafka-network:
+    driver: bridge
   absolute-jobs-network:
-    external: true # 👈 Do not remove — use existing network created separately
+    external: true # This network should already exist from your Laravel setup
+
+volumes:
+  zookeeper-data:
+  zookeeper-logs:
+  kafka-broker-1-data:
+  kafka-broker-2-data:
+  kafka-broker-3-data:

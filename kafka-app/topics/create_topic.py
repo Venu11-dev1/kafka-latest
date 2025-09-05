@@ -9,7 +9,7 @@ from .admin_client import admin_client
 from utils.logger import log
 
 # 🆕 Function to create topics
-def create_topic(topics, num_partitions=3, replication_factor=1):
+def create_topic(topics, num_partitions=3, replication_factor=3):
     if isinstance(topics, str):
         topics = [topics]  # Convert single topic to list
 
