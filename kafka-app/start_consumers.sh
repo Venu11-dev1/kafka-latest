@@ -1,27 +1,13 @@
 #!/bin/bash
 
-NUM_CONSUMERS=3
+echo "🚀 Starting 3 email consumer instances for parallel processing..."
 
-for i in $(seq 1 $NUM_CONSUMERS); do
-    echo "Starting consumer $i..."
-    python3 -m consumer.email_consumer_latest &
-done
+# Start 3 consumers in background
+python3 -m consumer.email_consumer_latest &
+python3 -m consumer.email_consumer_latest &
+python3 -m consumer.email_consumer_latest &
 
-echo "✅ $NUM_CONSUMERS consumers started."
+echo "✅ 3 consumers started. Each will process orders from Kafka partitions in parallel."
+
+# Keep the container alive so consumers keep running
 tail -f /dev/null
-
-
-# #!/bin/bash
-
-# # Start 3 consumer instances for parallel processing
-# echo "Starting 3 consumer instances..."
-
-# # Start consumers in background using module syntax
-# python3 -m consumer.email_consumer_latest &
-# python3 -m consumer.email_consumer_latest &
-# python3 -m consumer.email_consumer_latest &
-
-# echo "3 consumers started. Processing orders from 3 partitions in parallel."
-
-# # Keep container running and show logs
-# tail -f /dev/null
