@@ -1,5 +1,11 @@
-# utils/logger.py
-import logging, json, sys
+import logging
+import json
+import sys
+from pathlib import Path
+
+# Use Docker-mounted logs directory
+LOG_FILE_PATH = "/app/logs/kafka_app.log"
+Path("/app/logs").mkdir(parents=True, exist_ok=True)
 
 class JsonFormatter(logging.Formatter):
     def format(self, record):
@@ -8,16 +14,23 @@ class JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "message": record.getMessage(),
         }
-        # include extra object if provided
         if hasattr(record, 'obj') and record.obj is not None:
             log_record['obj'] = record.obj
         return json.dumps(log_record)
 
-handler = logging.StreamHandler(sys.stdout)
-handler.setFormatter(JsonFormatter())
-logger = logging.getLogger(__name__)
+# ---------- Stream Handler (stdout) ----------
+stdout_handler = logging.StreamHandler(sys.stdout)
+stdout_handler.setFormatter(JsonFormatter())
+
+# ---------- File Handler ----------
+file_handler = logging.FileHandler(LOG_FILE_PATH)
+file_handler.setFormatter(JsonFormatter())
+
+# ---------- Logger ----------
+logger = logging.getLogger("kafka_app")
 logger.setLevel(logging.INFO)
-logger.addHandler(handler)
+logger.addHandler(stdout_handler)
+logger.addHandler(file_handler)
 
 def log(message: str, level: str = "INFO", obj: dict = None):
     if obj:

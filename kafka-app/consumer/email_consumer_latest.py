@@ -1,5 +1,4 @@
 import json
-import logging
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -14,16 +13,14 @@ from config.settings import (
     MAIL_FROM,
     ENABLE_ORDER_EMAIL_CONSUMER
 )
-
-# -------------------- Logging --------------------
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s | %(levelname)s | %(message)s'
-)
-logger = logging.getLogger(__name__)
+from utils.logger import log  # <-- use custom logger
 
 # -------------------- Producer --------------------
-status_producer = Producer({'bootstrap.servers': BROKER})
+status_producer = Producer({
+    'bootstrap.servers': BROKER,
+    'api.version.request': True,
+    'socket.timeout.ms': 60000
+})
 
 def send_status_update(order_id, status):
     """Send order status back to Kafka."""
@@ -36,10 +33,10 @@ def send_status_update(order_id, status):
             topic="order-status",
             value=json.dumps(event).encode('utf-8')
         )
-        status_producer.flush()  # ensure message is sent immediately
-        logger.info(f"📤 Sent status update for Order {order_id}: {status}")
+        status_producer.flush()
+        log(f"Sent status update for Order {order_id}: {status}", level="INFO", obj=event)
     except Exception as e:
-        logger.error(f"❌ Failed to send status for Order {order_id}: {e}")
+        log(f"Failed to send status for Order {order_id}: {e}", level="ERROR", obj=event)
 
 # -------------------- Email --------------------
 def send_order_email(order_data):
@@ -88,27 +85,34 @@ def send_order_email(order_data):
             server.starttls()
             server.login(SMTP_USER, SMTP_PASS)
             server.send_message(msg)
-        logger.info(f"✅ Email sent to {order_data['email']} for order {order_data['order_number']}")
+
+        log(f"Email sent to {order_data['email']} for order {order_data['order_number']}",
+            level="INFO", obj=order_data)
         return True
     except Exception as e:
-        logger.error(f"❌ Failed to send email for order {order_data['order_number']}: {e}")
+        log(f"Failed to send email for order {order_data['order_number']}: {e}",
+            level="ERROR", obj=order_data)
         return False
 
 # -------------------- Consumer --------------------
 def consume_orders():
     if not ENABLE_ORDER_EMAIL_CONSUMER:
-        logger.info("Order email consumer is disabled")
+        log("Order email consumer is disabled", level="INFO")
         return
 
     consumer_config = {
         'bootstrap.servers': BROKER,
         'group.id': 'email-consumer-group',
-        'auto.offset.reset': 'earliest',  # read from beginning if no committed offset
-        'enable.auto.commit': False
+        'auto.offset.reset': 'earliest',  # start from beginning if no committed offset
+        'enable.auto.commit': False,
+        'api.version.request': True,
+        'socket.timeout.ms': 60000,
+        'session.timeout.ms': 10000
     }
     consumer = Consumer(consumer_config)
     consumer.subscribe([TOPIC])
-    logger.info(f"📧 Email Consumer started | Broker: {BROKER} | Topic: {TOPIC}")
+
+    log(f"Email Consumer started | Broker: {BROKER} | Topic: {TOPIC}", level="INFO")
 
     try:
         while True:
@@ -117,27 +121,28 @@ def consume_orders():
                 continue
             if msg.error():
                 if msg.error().code() == KafkaError._PARTITION_EOF:
-                    logger.info(f"Reached end of partition {msg.partition()}")
+                    log(f"Reached end of partition {msg.partition()}", level="INFO")
                 else:
-                    logger.error(f"Consumer error: {msg.error()}")
+                    log(f"Consumer error: {msg.error()}", level="ERROR")
                 continue
 
             # Parse the order message
             order = json.loads(msg.value().decode('utf-8'))
-            logger.info(f"📨 Processing Order ID: {order['id']} | Email: {order['email']} | Partition: {msg.partition()} | Offset: {msg.offset()}")
+            log(f"Processing Order ID: {order['id']} | Email: {order['email']} | Partition: {msg.partition()} | Offset: {msg.offset()}",
+                level="INFO", obj=order)
 
             # Send email
             if send_order_email(order):
                 consumer.commit(msg)  # mark as processed
                 send_status_update(order["id"], "email_sent")
-                logger.info(f"✅ Order {order['id']} processed successfully")
+                log(f"Order {order['id']} processed successfully", level="INFO", obj=order)
             else:
-                logger.error(f"❌ Failed to process order {order['id']}")
+                log(f"Failed to process order {order['id']}", level="ERROR", obj=order)
     except KeyboardInterrupt:
-        logger.info("Shutting down email consumer...")
+        log("Shutting down email consumer...", level="INFO")
     finally:
         consumer.close()
-        logger.info("Email consumer closed")
+        log("Email consumer closed", level="INFO")
 
 # -------------------- Main --------------------
 if __name__ == "__main__":
