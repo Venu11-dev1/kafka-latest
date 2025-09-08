@@ -157,3 +157,6 @@ volumes:
   kafka-broker-1-data:
   kafka-broker-2-data:
   kafka-broker-3-data:
+#This is must so php laravel and apache kafka will connect
+# docker network ls
+# docker network connect kafka-latest_kafka-network absolute-jobs-php
